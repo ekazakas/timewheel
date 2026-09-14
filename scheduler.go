@@ -32,24 +32,24 @@ func (s *Scheduler[T]) Remove(node *Node[T]) bool {
 }
 
 func (s *Scheduler[T]) Start(onExpire func(task Task[T])) {
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		for {
-			bucket, ok := s.dq.Poll(s.exit, func() int64 { return time.Now().UnixNano() })
-			if !ok {
-				return
-			}
-
-			s.tw.AdvanceClock(bucket.Expiration(), onExpire)
-
-			bucket.Flush(func(node *Node[T]) {
-				if s.tw.Add(node.Task) == nil {
-					onExpire(node.Task)
-				}
-			})
-		}
-	}()
+	//s.wg.Add(1)
+	//go func() {
+	//	defer s.wg.Done()
+	//	for {
+	//		bucket, ok := s.dq.Poll(s.exit, func() int64 { return time.Now().UnixNano() })
+	//		if !ok {
+	//			return
+	//		}
+	//
+	//		s.tw.AdvanceClock(bucket.Expiration(), onExpire)
+	//
+	//		bucket.Flush(func(node *Node[T]) {
+	//			if s.tw.Add(node.Task) == nil {
+	//				onExpire(node.Task)
+	//			}
+	//		})
+	//	}
+	//}()
 }
 
 func (s *Scheduler[T]) Stop() {

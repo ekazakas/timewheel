@@ -38,9 +38,9 @@ func (e *Engine[T]) Run(ctx context.Context) error {
 }
 
 func (e *Engine[T]) advance() {
-	if dueNodes := e.wheel.AdvanceClock(e.clock.Now()); len(dueNodes) > 0 {
-		for _, node := range dueNodes {
-			e.out <- node.Task.Value
-		}
-	}
+	//if dueNodes := e.wheel.AdvanceClock(e.clock.Now()); len(dueNodes) > 0 {
+	//	for _, node := range dueNodes {
+	//		e.out <- node.Task.Value
+	//	}
+	//}
 }
