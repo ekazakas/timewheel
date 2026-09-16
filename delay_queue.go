@@ -14,7 +14,7 @@ type (
 	}
 
 	bucketItem[T any] struct {
-		bucket     *Bucket[T]
+		bucket     *bucket[T]
 		expiration int64
 		index      int
 	}
@@ -64,7 +64,7 @@ func NewDelayQueue[T any](size int) *DelayQueue[T] {
 	return dq
 }
 
-func (dq *DelayQueue[T]) Offer(b *Bucket[T], expiration int64) {
+func (dq *DelayQueue[T]) Offer(b *bucket[T], expiration int64) {
 	dq.mu.Lock()
 	defer dq.mu.Unlock()
 
@@ -83,7 +83,7 @@ func (dq *DelayQueue[T]) Offer(b *Bucket[T], expiration int64) {
 	}
 }
 
-func (dq *DelayQueue[T]) Poll(exit <-chan struct{}, nowFn func() int64) (*Bucket[T], bool) {
+func (dq *DelayQueue[T]) Poll(exit <-chan struct{}, nowFn func() int64) (*bucket[T], bool) {
 	for {
 		dq.mu.Lock()
 		if len(dq.pq) == 0 {
