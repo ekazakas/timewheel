@@ -19,7 +19,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	wheel := timewheel.NewTimingWheel[Executable](1*time.Second, time.Now(), 60)
+	wheel := timewheel.New[Executable](1*time.Second, 60, time.Now())
 
 	out := make(chan Executable)
 	defer close(out)
@@ -44,30 +44,27 @@ func main() {
 		}
 	}()
 
-	initialTask := timewheel.NewTask[Executable](time.Now().Add(3*time.Second), func() error {
+	idx := engine.Schedule(time.Duration(3)*time.Second, func() error {
 		log.Println("This shouldn't print if rescheduled successfully!")
 
 		return nil
 	})
-
-	if node := wheel.Add(initialTask); node != nil {
-		log.Println("Scheduled task")
-
-		time.Sleep(1 * time.Second)
-
-		if wheel.Remove(node) {
-			log.Println("Removed task")
-		}
+	if idx == timewheel.NullIndex {
+		log.Println("Initial task was not scheduled")
 	}
 
-	updatedTask := timewheel.NewTask[Executable](time.Now().Add(7*time.Second), func() error {
+	time.Sleep(1 * time.Second)
+
+	if engine.Remove(idx) {
+		log.Println("Removed task")
+	}
+
+	if idx := engine.Schedule(3*time.Second, func() error {
 		log.Println("Success! The updated task was executed at its new prolonged time.")
 
 		return nil
-	})
-
-	if newNode := wheel.Add(updatedTask); newNode != nil {
-		log.Println("Rescheduled task")
+	}); idx == timewheel.NullIndex {
+		log.Println("Updated task was not scheduled")
 	}
 
 	<-ctx.Done()

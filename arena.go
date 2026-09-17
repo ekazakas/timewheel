@@ -1,7 +1,9 @@
 package timewheel
 
-import (
-	"sync"
+const (
+	chunkShift = 16
+	chunkSize  = 1 << chunkShift // 65,536 elements per slab
+	chunkMask  = chunkSize - 1
 )
 
 type (
@@ -10,7 +12,6 @@ type (
 		activeCount []uint32
 		freeHead    uint32
 		top         uint32
-		mu          sync.Mutex
 	}
 
 	node[T any] struct {
@@ -29,7 +30,7 @@ func newArena[T any](initialChunks int) *arena[T] {
 	a := &arena[T]{
 		chunks:      make([][]node[T], 0, initialChunks),
 		activeCount: make([]uint32, 0, initialChunks),
-		freeHead:    nullIndex,
+		freeHead:    NullIndex,
 		top:         0,
 	}
 
@@ -40,9 +41,19 @@ func newArena[T any](initialChunks int) *arena[T] {
 	return a
 }
 
-func (a *arena[T]) grow() {
+func (a *arena[T]) makeChunk() []node[T] {
 	newChunk := make([]node[T], chunkSize)
-	a.chunks = append(a.chunks, newChunk)
+
+	for i := range newChunk {
+		newChunk[i].next = NullIndex
+		newChunk[i].prev = NullIndex
+	}
+
+	return newChunk
+}
+
+func (a *arena[T]) grow() {
+	a.chunks = append(a.chunks, a.makeChunk())
 	a.activeCount = append(a.activeCount, 0)
 }
 
@@ -51,17 +62,14 @@ func (a *arena[T]) getNode(idx uint32) *node[T] {
 }
 
 func (a *arena[T]) alloc(expiration int64, value T) uint32 {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	var idx uint32
 
-	if a.freeHead != nullIndex {
+	if a.freeHead != NullIndex {
 		idx = a.freeHead
 		chunkIdx := idx >> chunkShift
 
 		if a.chunks[chunkIdx] == nil {
-			a.chunks[chunkIdx] = make([]node[T], chunkSize)
+			a.chunks[chunkIdx] = a.makeChunk()
 		}
 
 		n := a.getNode(idx)
@@ -70,8 +78,8 @@ func (a *arena[T]) alloc(expiration int64, value T) uint32 {
 
 		n.expiration = expiration
 		n.value = value
-		n.next = nullIndex
-		n.prev = nullIndex
+		n.next = NullIndex
+		n.prev = NullIndex
 
 		return idx
 	}
@@ -83,7 +91,7 @@ func (a *arena[T]) alloc(expiration int64, value T) uint32 {
 	}
 
 	if a.chunks[chunkIdx] == nil {
-		a.chunks[chunkIdx] = make([]node[T], chunkSize)
+		a.chunks[chunkIdx] = a.makeChunk()
 	}
 
 	idx = a.top
@@ -94,19 +102,16 @@ func (a *arena[T]) alloc(expiration int64, value T) uint32 {
 	n := a.getNode(idx)
 	n.expiration = expiration
 	n.value = value
-	n.next = nullIndex
-	n.prev = nullIndex
+	n.next = NullIndex
+	n.prev = NullIndex
 
 	return idx
 }
 
 func (a *arena[T]) free(idx uint32) {
-	if idx == nullIndex {
+	if idx == NullIndex {
 		return
 	}
-
-	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	chunkIdx := idx >> chunkShift
 	n := a.getNode(idx)
@@ -114,7 +119,7 @@ func (a *arena[T]) free(idx uint32) {
 	var zero T
 	n.value = zero
 	n.expiration = 0
-	n.prev = nullIndex
+	n.prev = NullIndex
 	n.next = a.freeHead
 
 	a.freeHead = idx
@@ -122,9 +127,6 @@ func (a *arena[T]) free(idx uint32) {
 }
 
 func (a *arena[T]) shrink() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	reclaimed := 0
 
 	for i := 1; i < len(a.chunks); i++ {

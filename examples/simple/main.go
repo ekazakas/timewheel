@@ -20,7 +20,7 @@ func main() {
 	defer cancel()
 
 	startTime := time.Now()
-	wheel := timewheel.NewTimingWheel[Executable](1*time.Second, startTime, 60)
+	wheel := timewheel.New[Executable](1*time.Second, 60, startTime)
 
 	out := make(chan Executable)
 	defer close(out)
@@ -47,16 +47,12 @@ func main() {
 	}()
 
 	for i := range 5 {
-		task := timewheel.NewTask[Executable](startTime.Add(3*time.Second), func() error {
+		if idx := engine.Schedule(time.Duration(i)*time.Second, func() error {
 			log.Printf("Hello World %d!", i)
 
 			return nil
-		})
-
-		if node := wheel.Add(task); node != nil {
-			log.Printf("Scheduled task %d", i)
-		} else {
-			log.Printf("Task %d not scheduled", i)
+		}); idx == timewheel.NullIndex {
+			log.Println("Task was not scheduled")
 		}
 	}
 

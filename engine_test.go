@@ -1,135 +1,176 @@
-package timewheel_test
+package timewheel
 
 import (
+	"context"
+	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-type FakeClock struct {
-	currentTime time.Time
-	tickChan    chan time.Time
-	stopped     bool
+type MockClock struct {
+	now time.Time
+	ch  chan time.Time
+	mu  sync.Mutex
 }
 
-func NewFakeClock(start time.Time) *FakeClock {
-	return &FakeClock{
-		currentTime: start,
-		tickChan:    make(chan time.Time, 1),
+func NewMockClock(start time.Time) *MockClock {
+	return &MockClock{
+		now: start,
+		ch:  make(chan time.Time, 100),
 	}
 }
 
-func (f *FakeClock) Now() time.Time {
-	return f.currentTime
+func (m *MockClock) Now() time.Time {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.now
 }
 
-func (f *FakeClock) TickChan() <-chan time.Time {
-	return f.tickChan
+func (m *MockClock) TickChan() <-chan time.Time {
+	return m.ch
 }
 
-func (f *FakeClock) Stop() {
-	f.stopped = true
+func (m *MockClock) Advance(d time.Duration) {
+	m.mu.Lock()
+	m.now = m.now.Add(d)
+	current := m.now
+	m.mu.Unlock()
+
+	m.ch <- current
 }
 
-func (f *FakeClock) Tick(d time.Duration) {
-	f.currentTime = f.currentTime.Add(d)
-
-	if !f.stopped {
-		f.tickChan <- f.currentTime
+func (m *MockClock) Stop() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	select {
+	case <-m.ch:
+	default:
+		close(m.ch)
 	}
 }
 
-func TestEngine_DeterministicExecution(t *testing.T) {
-	//startTime := time.Unix(1000, 0)
-	//fakeClock := NewFakeClock(startTime)
-	//
-	//tickDuration := 10 * time.Millisecond
-	//wheel := timewheel.NewTimingWheel[string](tickDuration, startTime, 10)
-	//outChan := make(chan string, 5)
-	//
-	//engine := timewheel.NewEngine(wheel, fakeClock, outChan)
-	//
-	//task1 := timewheel.NewTask(startTime.Add(20*time.Millisecond), "task-1")
-	//task2 := timewheel.NewTask(startTime.Add(40*time.Millisecond), "task-2")
-	//
-	//require.NotNil(t, wheel.Add(task1))
-	//require.NotNil(t, wheel.Add(task2))
-	//
-	//ctx, cancel := context.WithCancel(context.Background())
-	//defer cancel()
-	//
-	//engineErrChan := make(chan error, 1)
-	//go func() {
-	//	engineErrChan <- engine.Run(ctx)
-	//}()
-	//
-	//fakeClock.Tick(tickDuration)
-	//select {
-	//case val := <-outChan:
-	//	t.Fatalf("Unexpected task execution early: %s", val)
-	//case <-time.After(5 * time.Millisecond):
-	//}
-	//
-	//fakeClock.Tick(tickDuration)
-	//select {
-	//case val := <-outChan:
-	//	require.Equal(t, "task-1", val)
-	//case <-time.After(50 * time.Millisecond):
-	//	t.Fatal("Timeout waiting for task-1")
-	//}
-	//
-	//fakeClock.Tick(tickDuration)
-	//fakeClock.Tick(tickDuration)
-	//select {
-	//case val := <-outChan:
-	//	require.Equal(t, "task-2", val)
-	//case <-time.After(50 * time.Millisecond):
-	//	t.Fatal("Timeout waiting for task-2")
-	//}
-	//
-	//cancel()
-	//select {
-	//case err := <-engineErrChan:
-	//	require.ErrorIs(t, err, context.Canceled)
-	//case <-time.After(50 * time.Millisecond):
-	//	t.Fatal("Engine failed to exit when context was canceled")
-	//}
+func TestEngine_ScheduleAndExpire(t *testing.T) {
+	start := time.Unix(1000, 0)
+	clock := NewMockClock(start)
+	out := make(chan string, 10)
+
+	wheel := New[string](100*time.Millisecond, 10, start)
+	engine := NewEngine[string](wheel, clock, out)
+
+	ctx := t.Context()
+
+	go func() {
+		err := engine.Run(ctx)
+		assert.NoError(t, err)
+	}()
+
+	id1 := engine.Schedule(200*time.Millisecond, "job-200ms")
+	id2 := engine.Schedule(500*time.Millisecond, "job-500ms")
+
+	require.NotEqual(t, NullIndex, id1)
+	require.NotEqual(t, NullIndex, id2)
+
+	clock.Advance(300 * time.Millisecond)
+
+	select {
+	case val := <-out:
+		assert.Equal(t, "job-200ms", val)
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for job-200ms")
+	}
+
+	clock.Advance(300 * time.Millisecond)
+
+	select {
+	case val := <-out:
+		assert.Equal(t, "job-500ms", val)
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for job-500ms")
+	}
 }
 
-func BenchmarkEngine_Throughput(b *testing.B) {
-	//startTime := time.Now()
-	//wheel := timewheel.NewTimingWheel[int](1*time.Millisecond, startTime, 100)
-	//outChan := make(chan int, b.N)
-	//
-	//for i := range b.N {
-	//	wheel.Add(timewheel.NewTask(startTime.Add(5*time.Millisecond), i))
-	//}
-	//
-	//mockClock := NewFakeClock(startTime)
-	//engine := timewheel.NewEngine(wheel, mockClock, outChan)
-	//
-	//go func() {
-	//	if err := engine.Run(b.Context()); errors.Is(err, context.Canceled) {
-	//		return
-	//	} else if err != nil {
-	//		b.Error(err)
-	//	}
-	//}()
-	//
-	//var wg sync.WaitGroup
-	//wg.Go(func() {
-	//	count := 0
-	//	for range outChan {
-	//		count++
-	//
-	//		if count == b.N {
-	//			return
-	//		}
-	//	}
-	//})
-	//
-	//for range 10 {
-	//	mockClock.Tick(1 * time.Millisecond)
-	//}
-	//
-	//wg.Wait()
+func TestEngine_Cancel(t *testing.T) {
+	start := time.Unix(1000, 0)
+	clock := NewMockClock(start)
+	out := make(chan string, 10)
+
+	wheel := New[string](100*time.Millisecond, 10, start)
+	engine := NewEngine[string](wheel, clock, out)
+
+	ctx := t.Context()
+
+	go func() {
+		_ = engine.Run(ctx)
+	}()
+
+	id := engine.Schedule(200*time.Millisecond, "canceled-job")
+	require.NotEqual(t, NullIndex, id)
+
+	removed := engine.Remove(id)
+	assert.True(t, removed)
+
+	clock.Advance(300 * time.Millisecond)
+
+	select {
+	case val := <-out:
+		t.Fatalf("unexpected value received: %s", val)
+	case <-time.After(50 * time.Millisecond):
+	}
+}
+
+func TestEngine_ContextCancellationUnblocksFullChannel(t *testing.T) {
+	start := time.Unix(1000, 0)
+	clock := NewMockClock(start)
+	out := make(chan string, 1)
+
+	wheel := New[string](100*time.Millisecond, 10, start)
+	engine := NewEngine[string](wheel, clock, out)
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	engine.Schedule(100*time.Millisecond, "item-1")
+	engine.Schedule(100*time.Millisecond, "item-2")
+
+	engineDone := make(chan error, 1)
+	go func() {
+		engineDone <- engine.Run(ctx)
+	}()
+
+	clock.Advance(100 * time.Millisecond)
+
+	time.Sleep(10 * time.Millisecond)
+	cancel()
+
+	select {
+	case err := <-engineDone:
+		assert.NoError(t, err)
+	case <-time.After(1 * time.Second):
+		t.Fatal("Engine.Run deadlocked when out channel was full during cancellation")
+	}
+}
+
+func TestEngine_ClockChannelClosed(t *testing.T) {
+	start := time.Unix(1000, 0)
+	clock := NewMockClock(start)
+	out := make(chan string, 10)
+
+	wheel := New[string](100*time.Millisecond, 10, start)
+	engine := NewEngine[string](wheel, clock, out)
+
+	engineDone := make(chan error, 1)
+	go func() {
+		engineDone <- engine.Run(context.Background())
+	}()
+
+	clock.Stop()
+
+	select {
+	case err := <-engineDone:
+		assert.NoError(t, err, "engine should exit cleanly when clock channel is closed")
+	case <-time.After(1 * time.Second):
+		t.Fatal("engine failed to exit after clock channel closed")
+	}
 }

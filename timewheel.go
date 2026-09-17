@@ -17,18 +17,15 @@ type TimingWheel[T any] struct {
 }
 
 func New[T any](tick time.Duration, size int64, start time.Time) *TimingWheel[T] {
-	return newWheelWithArena[T](tick, size, start, newArena[T](1))
+	return newWheelWithArena[T](tick.Nanoseconds(), size, start.UnixNano(), newArena[T](1))
 }
 
-func newWheelWithArena[T any](tick time.Duration, size int64, start time.Time, a *arena[T]) *TimingWheel[T] {
-	tickNs := tick.Nanoseconds()
-	startNs := start.UnixNano()
-
+func newWheelWithArena[T any](tickNs int64, size int64, startNs int64, a *arena[T]) *TimingWheel[T] {
 	buckets := make([]bucket[T], size)
 	for i := range size {
 		buckets[i] = bucket[T]{
-			head: nullIndex,
-			tail: nullIndex,
+			head: NullIndex,
+			tail: NullIndex,
 		}
 	}
 
@@ -50,7 +47,7 @@ func (tw *TimingWheel[T]) Add(expiration int64, value T) uint32 {
 }
 
 func (tw *TimingWheel[T]) Remove(nodeIdx uint32) bool {
-	if nodeIdx == nullIndex {
+	if nodeIdx == NullIndex {
 		return false
 	}
 
@@ -60,11 +57,11 @@ func (tw *TimingWheel[T]) Remove(nodeIdx uint32) bool {
 	return tw.remove(nodeIdx)
 }
 
-func (tw *TimingWheel[T]) AdvanceClock(targetTimeNs int64, onExpire func(value T)) {
+func (tw *TimingWheel[T]) AdvanceClock(targetTime time.Time) []T {
 	tw.mu.Lock()
 	defer tw.mu.Unlock()
 
-	tw.advanceClock(targetTimeNs, onExpire)
+	return tw.advanceClock(targetTime.UnixNano())
 }
 
 func (tw *TimingWheel[T]) Shrink() int {
@@ -76,7 +73,7 @@ func (tw *TimingWheel[T]) Shrink() int {
 
 func (tw *TimingWheel[T]) add(expiration int64, value T) uint32 {
 	if expiration < tw.currentTime+tw.tick {
-		return nullIndex
+		return NullIndex
 	}
 
 	if expiration < tw.currentTime+tw.interval {
@@ -88,7 +85,7 @@ func (tw *TimingWheel[T]) add(expiration int64, value T) uint32 {
 	}
 
 	if tw.overflow == nil {
-		tw.overflow = newWheelWithArena[T](time.Duration(tw.interval), tw.size, time.Unix(0, tw.currentTime), tw.arena)
+		tw.overflow = newWheelWithArena[T](tw.interval, tw.size, tw.currentTime, tw.arena)
 	}
 
 	return tw.overflow.add(expiration, value)
@@ -114,7 +111,7 @@ func (tw *TimingWheel[T]) remove(nodeIdx uint32) bool {
 	return false
 }
 
-func (tw *TimingWheel[T]) advanceClock(targetTimeNs int64, onExpire func(value T)) {
+func (tw *TimingWheel[T]) advanceClock(targetTimeNs int64) (dueValues []T) {
 	for targetTimeNs >= tw.currentTime+tw.tick {
 		tw.currentTime += tw.tick
 
@@ -122,7 +119,7 @@ func (tw *TimingWheel[T]) advanceClock(targetTimeNs int64, onExpire func(value T
 		head := tw.buckets[idx].flush()
 
 		curr := head
-		for curr != nullIndex {
+		for curr != NullIndex {
 			n := tw.arena.getNode(curr)
 			next := n.next
 			val := n.value
@@ -130,19 +127,19 @@ func (tw *TimingWheel[T]) advanceClock(targetTimeNs int64, onExpire func(value T
 
 			tw.arena.free(curr)
 
-			if exp <= targetTimeNs {
-				if onExpire != nil {
-					go onExpire(val)
-				}
+			if exp <= targetTimeNs && exp < tw.currentTime+tw.tick {
+				dueValues = append(dueValues, val)
 			} else {
 				tw.add(exp, val)
 			}
 
 			curr = next
 		}
-
-		if tw.overflow != nil {
-			tw.overflow.advanceClock(tw.currentTime, onExpire)
-		}
 	}
+
+	if tw.overflow != nil {
+		dueValues = append(dueValues, tw.overflow.advanceClock(targetTimeNs)...)
+	}
+
+	return
 }

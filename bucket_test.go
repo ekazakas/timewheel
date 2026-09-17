@@ -1,18 +1,16 @@
 package timewheel
 
 import (
-	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestBucket_AddSingleNode(t *testing.T) {
 	a := newArena[string](1)
 	b := &bucket[string]{
-		head: nullIndex,
-		tail: nullIndex,
+		head: NullIndex,
+		tail: NullIndex,
 	}
 
 	idx := a.alloc(100, "task-1")
@@ -22,15 +20,15 @@ func TestBucket_AddSingleNode(t *testing.T) {
 	assert.Equal(t, idx, b.tail, "tail should point to the added node")
 
 	nd := a.getNode(idx)
-	assert.Equal(t, nullIndex, nd.prev, "single node prev should be nullIndex")
-	assert.Equal(t, nullIndex, nd.next, "single node next should be nullIndex")
+	assert.Equal(t, NullIndex, nd.prev, "single node prev should be nullIndex")
+	assert.Equal(t, NullIndex, nd.next, "single node next should be nullIndex")
 }
 
 func TestBucket_AddMultipleNodes(t *testing.T) {
 	a := newArena[string](1)
 	b := &bucket[string]{
-		head: nullIndex,
-		tail: nullIndex,
+		head: NullIndex,
+		tail: NullIndex,
 	}
 
 	idx1 := a.alloc(100, "task-1")
@@ -46,9 +44,9 @@ func TestBucket_AddMultipleNodes(t *testing.T) {
 
 	assert.Equal(t, idx2, a.getNode(idx1).next)
 	assert.Equal(t, idx3, a.getNode(idx2).next)
-	assert.Equal(t, nullIndex, a.getNode(idx3).next)
+	assert.Equal(t, NullIndex, a.getNode(idx3).next)
 
-	assert.Equal(t, nullIndex, a.getNode(idx1).prev)
+	assert.Equal(t, NullIndex, a.getNode(idx1).prev)
 	assert.Equal(t, idx1, a.getNode(idx2).prev)
 	assert.Equal(t, idx2, a.getNode(idx3).prev)
 }
@@ -58,8 +56,8 @@ func TestBucket_RemoveHeadTailAndMiddle(t *testing.T) {
 
 	t.Run("remove head", func(t *testing.T) {
 		b := &bucket[int]{
-			head: nullIndex,
-			tail: nullIndex,
+			head: NullIndex,
+			tail: NullIndex,
 		}
 		idx1 := a.alloc(100, 1)
 		idx2 := a.alloc(100, 2)
@@ -71,13 +69,13 @@ func TestBucket_RemoveHeadTailAndMiddle(t *testing.T) {
 		assert.True(t, removed)
 		assert.Equal(t, idx2, b.head, "head should update to second node")
 		assert.Equal(t, idx2, b.tail)
-		assert.Equal(t, nullIndex, a.getNode(idx2).prev)
+		assert.Equal(t, NullIndex, a.getNode(idx2).prev)
 	})
 
 	t.Run("remove tail", func(t *testing.T) {
 		b := &bucket[int]{
-			head: nullIndex,
-			tail: nullIndex,
+			head: NullIndex,
+			tail: NullIndex,
 		}
 		idx1 := a.alloc(100, 1)
 		idx2 := a.alloc(100, 2)
@@ -89,13 +87,13 @@ func TestBucket_RemoveHeadTailAndMiddle(t *testing.T) {
 		assert.True(t, removed)
 		assert.Equal(t, idx1, b.head)
 		assert.Equal(t, idx1, b.tail, "tail should update to first node")
-		assert.Equal(t, nullIndex, a.getNode(idx1).next)
+		assert.Equal(t, NullIndex, a.getNode(idx1).next)
 	})
 
 	t.Run("remove middle node", func(t *testing.T) {
 		b := &bucket[int]{
-			head: nullIndex,
-			tail: nullIndex,
+			head: NullIndex,
+			tail: NullIndex,
 		}
 		idx1 := a.alloc(100, 1)
 		idx2 := a.alloc(100, 2)
@@ -115,8 +113,8 @@ func TestBucket_RemoveHeadTailAndMiddle(t *testing.T) {
 
 	t.Run("remove non-existent node", func(t *testing.T) {
 		b := &bucket[int]{
-			head: nullIndex,
-			tail: nullIndex,
+			head: NullIndex,
+			tail: NullIndex,
 		}
 		idx1 := a.alloc(100, 1)
 		idx2 := a.alloc(100, 2)
@@ -131,8 +129,8 @@ func TestBucket_RemoveHeadTailAndMiddle(t *testing.T) {
 func TestBucket_Flush(t *testing.T) {
 	a := newArena[string](1)
 	b := &bucket[string]{
-		head: nullIndex,
-		tail: nullIndex,
+		head: NullIndex,
+		tail: NullIndex,
 	}
 
 	idx1 := a.alloc(100, "task-1")
@@ -144,48 +142,14 @@ func TestBucket_Flush(t *testing.T) {
 	headIdx := b.flush()
 
 	assert.Equal(t, idx1, headIdx, "flush should return original head index")
-	assert.Equal(t, nullIndex, b.head, "bucket head should reset to nullIndex")
-	assert.Equal(t, nullIndex, b.tail, "bucket tail should reset to nullIndex")
+	assert.Equal(t, NullIndex, b.head, "bucket head should reset to nullIndex")
+	assert.Equal(t, NullIndex, b.tail, "bucket tail should reset to nullIndex")
 
 	curr := headIdx
 	count := 0
-	for curr != nullIndex {
+	for curr != NullIndex {
 		count++
 		curr = a.getNode(curr).next
 	}
 	assert.Equal(t, 2, count, "traversed linked list count after flush should match added items")
-}
-
-func TestBucket_ConcurrentOperations(t *testing.T) {
-	a := newArena[int](2)
-	b := &bucket[int]{
-		head: nullIndex,
-		tail: nullIndex,
-	}
-
-	const goroutines = 10
-	const opsPerGoroutine = 100
-
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-
-	for g := range goroutines {
-		go func(id int) {
-			defer wg.Done()
-			for i := range opsPerGoroutine {
-				idx := a.alloc(int64(i), id*1000+i)
-				b.add(a, idx)
-
-				if i%2 == 0 {
-					b.remove(a, idx)
-				}
-			}
-		}(g)
-	}
-
-	wg.Wait()
-
-	require.NotPanics(t, func() {
-		b.flush()
-	})
 }
