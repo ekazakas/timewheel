@@ -127,7 +127,7 @@ func (tw *TimingWheel[T]) advanceClock(targetTimeNs int64) (dueValues []T) {
 
 			tw.arena.free(curr)
 
-			if exp <= targetTimeNs && exp < tw.currentTime+tw.tick {
+			if exp < tw.currentTime+tw.tick {
 				dueValues = append(dueValues, val)
 			} else {
 				tw.add(exp, val)

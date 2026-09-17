@@ -31,7 +31,7 @@ func newArena[T any](initialChunks int) *arena[T] {
 		chunks:      make([][]node[T], 0, initialChunks),
 		activeCount: make([]uint32, 0, initialChunks),
 		freeHead:    NullIndex,
-		top:         0,
+		top:         1,
 	}
 
 	for i := 0; i < initialChunks; i++ {
@@ -42,14 +42,7 @@ func newArena[T any](initialChunks int) *arena[T] {
 }
 
 func (a *arena[T]) makeChunk() []node[T] {
-	newChunk := make([]node[T], chunkSize)
-
-	for i := range newChunk {
-		newChunk[i].next = NullIndex
-		newChunk[i].prev = NullIndex
-	}
-
-	return newChunk
+	return make([]node[T], chunkSize)
 }
 
 func (a *arena[T]) grow() {

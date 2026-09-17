@@ -1,5 +1,5 @@
 package timewheel
 
 const (
-	NullIndex uint32 = 0xFFFFFFFF
+	NullIndex uint32 = 0
 )

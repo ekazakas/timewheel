@@ -44,19 +44,18 @@ func main() {
 		}
 	}()
 
-	idx := engine.Schedule(time.Duration(3)*time.Second, func() error {
+	if idx := engine.Schedule(time.Duration(3)*time.Second, func() error {
 		log.Println("This shouldn't print if rescheduled successfully!")
 
 		return nil
-	})
-	if idx == timewheel.NullIndex {
+	}); idx == timewheel.NullIndex {
 		log.Println("Initial task was not scheduled")
-	}
+	} else {
+		time.Sleep(1 * time.Second)
 
-	time.Sleep(1 * time.Second)
-
-	if engine.Remove(idx) {
-		log.Println("Removed task")
+		if engine.Remove(idx) {
+			log.Println("Removed task")
+		}
 	}
 
 	if idx := engine.Schedule(3*time.Second, func() error {

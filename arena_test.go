@@ -38,7 +38,7 @@ func TestArena_GrowOnDemand(t *testing.T) {
 	arn := newArena[int](1)
 	initialChunkCount := len(arn.chunks)
 
-	for i := range chunkSize {
+	for i := range chunkSize - 1 {
 		arn.alloc(int64(i), i)
 	}
 
