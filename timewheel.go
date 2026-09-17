@@ -16,11 +16,11 @@ type TimingWheel[T any] struct {
 	mu          sync.Mutex
 }
 
-func New[T any](tick time.Duration, size int64, start time.Time) *TimingWheel[T] {
-	return newWheelWithArena[T](tick.Nanoseconds(), size, start.UnixNano(), newArena[T](1))
+func NewTimingWheel[T any](tick time.Duration, size int64, start time.Time) *TimingWheel[T] {
+	return newWithArena[T](tick.Nanoseconds(), size, start.UnixNano(), newArena[T](1))
 }
 
-func newWheelWithArena[T any](tickNs int64, size int64, startNs int64, a *arena[T]) *TimingWheel[T] {
+func newWithArena[T any](tickNs int64, size int64, startNs int64, a *arena[T]) *TimingWheel[T] {
 	buckets := make([]bucket[T], size)
 	for i := range size {
 		buckets[i] = bucket[T]{
@@ -85,7 +85,7 @@ func (tw *TimingWheel[T]) add(expiration int64, value T) uint32 {
 	}
 
 	if tw.overflow == nil {
-		tw.overflow = newWheelWithArena[T](tw.interval, tw.size, tw.currentTime, tw.arena)
+		tw.overflow = newWithArena[T](tw.interval, tw.size, tw.currentTime, tw.arena)
 	}
 
 	return tw.overflow.add(expiration, value)

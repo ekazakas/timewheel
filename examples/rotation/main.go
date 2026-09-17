@@ -19,7 +19,7 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	wheel := timewheel.New[Executable](1*time.Second, 60, time.Now())
+	wheel := timewheel.NewTimingWheel[Executable](1*time.Second, 60, time.Now())
 
 	out := make(chan Executable)
 	defer close(out)

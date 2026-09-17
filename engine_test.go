@@ -57,7 +57,7 @@ func TestEngine_ScheduleAndExpire(t *testing.T) {
 	clock := NewMockClock(start)
 	out := make(chan string, 10)
 
-	wheel := New[string](100*time.Millisecond, 10, start)
+	wheel := NewTimingWheel[string](100*time.Millisecond, 10, start)
 	engine := NewEngine[string](wheel, clock, out)
 
 	ctx := t.Context()
@@ -97,7 +97,7 @@ func TestEngine_Cancel(t *testing.T) {
 	clock := NewMockClock(start)
 	out := make(chan string, 10)
 
-	wheel := New[string](100*time.Millisecond, 10, start)
+	wheel := NewTimingWheel[string](100*time.Millisecond, 10, start)
 	engine := NewEngine[string](wheel, clock, out)
 
 	ctx := t.Context()
@@ -126,7 +126,7 @@ func TestEngine_ContextCancellationUnblocksFullChannel(t *testing.T) {
 	clock := NewMockClock(start)
 	out := make(chan string, 1)
 
-	wheel := New[string](100*time.Millisecond, 10, start)
+	wheel := NewTimingWheel[string](100*time.Millisecond, 10, start)
 	engine := NewEngine[string](wheel, clock, out)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -157,7 +157,7 @@ func TestEngine_ClockChannelClosed(t *testing.T) {
 	clock := NewMockClock(start)
 	out := make(chan string, 10)
 
-	wheel := New[string](100*time.Millisecond, 10, start)
+	wheel := NewTimingWheel[string](100*time.Millisecond, 10, start)
 	engine := NewEngine[string](wheel, clock, out)
 
 	engineDone := make(chan error, 1)

@@ -20,7 +20,7 @@ This implementation reduces those costs to **$O(1)$ amortized time** for inserti
 Ensure you have Go installed (version `1.26.4` or higher is specified for this workspace).
 
 ```bash
-go get [github.com/ekazakas/timewheel](https://github.com/ekazakas/timewheel)
+go get github.com/ekazakas/timewheel
 ```
 
 ## Quick Start
@@ -40,7 +40,6 @@ import (
 	"time"
 
 	"github.com/ekazakas/timewheel"
-	"github.com/google/uuid"
 )
 
 type Executable func() error
@@ -53,7 +52,7 @@ func main() {
 	startTime := time.Now()
 
 	// 2. Instantiate a Timing Wheel: 1-second ticks, 60 slots (1-minute coverage range per level)
-	wheel := timewheel.NewTimingWheel[Executable](1*time.Second, startTime, 60)
+	wheel := timewheel.NewTimingWheel[Executable](1*time.Second, 60, startTime)
 
 	// 3. Create your outbound execution channel
 	out := make(chan Executable)
@@ -82,30 +81,25 @@ func main() {
 	}()
 
 	// 6. Schedule some future items
-	for i := 0; i < 100; i++ {
-		taskIndex := i
-		task := timewheel.NewTask[Executable](uuid.New(), startTime.Add(5*time.Second), func() error {
-			fmt.Printf("Executed Task #%d!\n", taskIndex)
+	for i := range 100 {
+		engine.Schedule(time.Duration(2*i)*time.Second, func() error {
+			fmt.Printf("Executed Task #%d!\n", i)
+
 			return nil
 		})
-
-		if ok := wheel.Add(task); !ok {
-			log.Println("Task dropped: expiration window already passed.")
-		}
 	}
 
 	// Wait for Ctrl+C / Termination
 	<-ctx.Done()
+
 	log.Println("Engine exited gracefully.")
+}
 ```
 
 ## Architecture & Component Design
 
 The project architecture is composed of distinct layers separating data structural calculations, concurrency synchronization, and system time driving loops.
 Component Overview
-
- - Task[T]: The core wrapper package holding a generic payload, explicit expiration timestamp (converted internally to nanoseconds), and a distinct uuid.UUID identifier.
- - Bucket[T]: A thread-safe, mutex-protected array layout grouping tasks destined for the exact same granular tick window.
  - TimingWheel[T]: The circular array structural component representing time. Manages routing logic, tracking boundaries, and dynamically mounts pointer allocations to its overflow wheel properties.
  - Engine[T]: The orchestration wrapper bridging an abstracted Clock interface ticker loop to the underlying state machine.
 
@@ -134,4 +128,3 @@ To run the complete test suite, execute:
 ```bash
 go test -v ./...
 ```
-find . -type f -not -path '*/.*' -not -path '*build*' -exec sh -c 'for f; do echo "=== FILE: $f ==="; cat "$f"; echo "\n"; done' _ {} + > project_code.txt

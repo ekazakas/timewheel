@@ -15,7 +15,7 @@ func TestTimingWheel_AddAndExpire(t *testing.T) {
 	tick := 100 * time.Millisecond
 	size := int64(10)
 
-	tw := New[string](tick, size, start)
+	tw := NewTimingWheel[string](tick, size, start)
 
 	exp1 := start.Add(200 * time.Millisecond).UnixNano()
 	exp2 := start.Add(500 * time.Millisecond).UnixNano()
@@ -35,7 +35,7 @@ func TestTimingWheel_AddAndExpire(t *testing.T) {
 
 func TestTimingWheel_PastExpiration(t *testing.T) {
 	start := time.Unix(1000, 0)
-	tw := New[string](time.Second, 10, start)
+	tw := NewTimingWheel[string](time.Second, 10, start)
 
 	pastExp := start.Add(-1 * time.Second).UnixNano()
 	idx := tw.Add(pastExp, "past-task")
@@ -45,7 +45,7 @@ func TestTimingWheel_PastExpiration(t *testing.T) {
 
 func TestTimingWheel_Remove(t *testing.T) {
 	start := time.Unix(1000, 0)
-	tw := New[string](time.Second, 10, start)
+	tw := NewTimingWheel[string](time.Second, 10, start)
 
 	exp := start.Add(3 * time.Second).UnixNano()
 	nodeIdx := tw.Add(exp, "cancel-me")
@@ -64,7 +64,7 @@ func TestTimingWheel_OverflowWheelCascade(t *testing.T) {
 	tick := time.Second
 	size := int64(10)
 
-	tw := New[string](tick, size, start)
+	tw := NewTimingWheel[string](tick, size, start)
 
 	farExp := start.Add(15 * time.Second).UnixNano()
 	nodeIdx := tw.Add(farExp, "overflow-task")
@@ -77,7 +77,7 @@ func TestTimingWheel_OverflowWheelCascade(t *testing.T) {
 
 func TestTimingWheel_ConcurrentAccess(t *testing.T) {
 	start := time.Unix(1000, 0)
-	tw := New[int](10*time.Millisecond, 100, start)
+	tw := NewTimingWheel[int](10*time.Millisecond, 100, start)
 
 	const goroutines = 10
 	const opsPerGoroutine = 500

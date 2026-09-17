@@ -20,7 +20,7 @@ func main() {
 	defer cancel()
 
 	startTime := time.Now()
-	wheel := timewheel.New[Executable](1*time.Second, 60, startTime)
+	wheel := timewheel.NewTimingWheel[Executable](1*time.Second, 60, startTime)
 
 	out := make(chan Executable)
 	defer close(out)
