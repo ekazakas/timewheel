@@ -1,6 +1,8 @@
 package timewheel
 
-import "time"
+import (
+	"time"
+)
 
 type (
 	Clock interface {
